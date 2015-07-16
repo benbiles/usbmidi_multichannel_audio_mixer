@@ -1,0 +1,199 @@
+// edited USB-MIDI dump utility
+// BB added #include <usbhub.h> and USBHub  Hub1(&Usb); under USB Usb; for hub support ( power on launch control )
+
+
+#include <Usb.h>
+#include <usbh_midi.h>
+#include <SPI.h>
+#include <usbhub.h>
+
+
+USB  Usb;
+USBH_MIDI  Midi(&Usb);
+USBHub  Hub1(&Usb);
+
+void MIDI_poll();
+void doDelay(unsigned long t1, unsigned long t2, unsigned long delayTime);
+
+boolean bFirst;
+uint16_t pid, vid;
+
+void setup()
+{
+  bFirst = true;
+  vid = pid = 0;
+  Serial.begin(115200);
+
+  //Workaround for non UHS2.0 Shield 
+  pinMode(7,OUTPUT);
+  digitalWrite(7,HIGH);
+
+  if (Usb.Init() == -1) {
+    while(1); //halt
+  }//if (Usb.Init() == -1...
+  delay( 200 );
+}
+
+void loop()
+{
+  unsigned long t1;
+
+  Usb.Task();
+  t1 = micros();
+  if( Usb.getUsbTaskState() == USB_STATE_RUNNING )
+  {
+    MIDI_poll();
+  }
+  //delay(1ms)
+  //doDelay(t1, micros(), 1000);
+}
+
+// Poll USB MIDI Controler AND DUMP TO CONSOLE ???
+void MIDI_poll()
+{
+    char buf[20];
+    uint8_t bufMidi[64];
+    uint16_t  rcvd;
+
+    if(Midi.vid != vid || Midi.pid != pid){
+      sprintf(buf, "VID:%04X, PID:%04X", Midi.vid, Midi.pid);
+      Serial.println(buf);
+      vid = Midi.vid;
+      pid = Midi.pid;
+    }
+    if(Midi.RecvData( &rcvd,  bufMidi) == 0 )
+
+    // Print the whole midi data number for testing / finding buttons sliders pots etc :)
+    // enable to print data to console
+   {
+ //   for(int loopx=1; loopx<3; loopx++)
+     {
+ //    int machine_number = bufMidi[loopx];
+ //         Serial.println("");
+ //         Serial.print(machine_number);
+ //         Serial.println("");
+     }
+    // END PRINT whole Midi Data :)
+   
+
+     
+     {
+  if((bufMidi[2] == 21) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 1  ");
+     }
+  if((bufMidi[2] == 22) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 2  ");
+     }
+  if((bufMidi[2] == 23) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 3  ");
+     }
+  if((bufMidi[2] == 24) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 4  ");
+     }
+  if((bufMidi[2] == 25) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 5  ");  
+     }
+  if((bufMidi[2] == 26) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 6  ");
+     }
+  if((bufMidi[2] == 27) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 7  ");
+     }
+  if((bufMidi[2] == 28) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 8  ");
+     }
+  if((bufMidi[2] == 41) && (bufMidi[1] == 184)){
+      Serial.print("PAN    1  ");
+     }
+  if((bufMidi[2] == 42) && (bufMidi[1] == 184)){
+      Serial.print("PAN    2  ");
+     }
+  if((bufMidi[2] == 43) && (bufMidi[1] == 184)){
+      Serial.print("PAN    3  ");
+     }
+  if((bufMidi[2] == 44) && (bufMidi[1] == 184)){
+      Serial.print("PAN    4  ");
+     }
+  if((bufMidi[2] == 45) && (bufMidi[1] == 184)){
+      Serial.print("PAN    5  ");
+     }
+  if((bufMidi[2] == 46) && (bufMidi[1] == 184)){
+      Serial.print("PAN    6  ");
+     }
+  if((bufMidi[2] == 47) && (bufMidi[1] == 184)){
+      Serial.print("PAN    7  ");
+     }
+  if((bufMidi[2] == 48) && (bufMidi[1] == 184)){
+      Serial.print("PAN    8  ");
+     }
+  // buttons
+  
+     if((bufMidi[2] == 9) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 1  ");
+     }
+      if((bufMidi[2] == 10) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 2  ");
+     }
+      if((bufMidi[2] == 11) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 3  ");
+     }
+      if((bufMidi[2] == 12) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 4  ");
+     }
+      if((bufMidi[2] == 25) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 5  ");
+     }
+      if((bufMidi[2] == 26) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 6  ");
+     }
+      if((bufMidi[2] == 27) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 7  ");
+     }
+      if((bufMidi[2] == 28) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 8  ");
+     }
+//Arrows
+      if((bufMidi[2] == 114) && (bufMidi[1] == 184) && (bufMidi[3] == 127)) {
+      Serial.print("Review Back  ");
+     }
+      if((bufMidi[2] == 115) && (bufMidi[1] == 184) && (bufMidi[3] == 127)) {
+      Serial.print("Review Forward  ");
+     }
+      if((bufMidi[2] == 116) && (bufMidi[1] == 184) && (bufMidi[3] == 127)){
+      Serial.print("STOP  ");
+      }
+      if((bufMidi[2] == 117) && (bufMidi[1] == 184) && (bufMidi[3] == 127)){
+      Serial.print("RECORD  ");
+      }
+
+       
+       // sprintf(buf, "%08X:", millis());
+       // Serial.print(buf);
+        for(int i=3; i<4; i++){
+        //  sprintf(buf, " %02X", bufMidi[i]);
+         // Serial.print(buf);
+          int basicnumber = bufMidi[i];
+          Serial.print(basicnumber);
+     }
+
+     
+     }   
+        Serial.println("");
+    }
+}
+
+// Delay time (max 16383 us)
+void doDelay(unsigned long t1, unsigned long t2, unsigned long delayTime)
+{
+    unsigned long t3;
+
+    if( t1 > t2 ){
+      t3 = (4294967295 - t1 + t2);
+    }else{
+      t3 = t2 - t1;
+    }
+
+    if( t3 < delayTime ){
+      delayMicroseconds(delayTime - t3);
+    }
+}
