@@ -1,0 +1,2 @@
+# novation_launchcontrol_usbmidi_arduino
+arduino novation launchcontrol usb midi usbhost
