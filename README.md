@@ -39,3 +39,9 @@ http://www.benbiles.com/sites/default/files/LAUNCHcontrolBB_0.ino
 press keys and turn knobs on the LaunchControl and you should see the relevent midi values 0-127 for faders
 
 EDIT THE CODE AND GET THE NUMBERS TO DO THINGS FROM THE ARDUINO :) !!!!
+
+
+the file AIC3101_codec_control will inistialise the Codec and output audio coming in from I2S. The Launch control controls volume left and right with knobs 1 & 2
+
+I will be working next on an 8 channel mixer DAC for 8 channel mix control.
+
