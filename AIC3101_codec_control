@@ -1,0 +1,395 @@
+
+#include <Wire.h> // I2C libarary
+
+void volume();  // declair global void for codec volume
+byte volume1 = 01111111; // declair global vasribale for codec volume controls
+byte volume2 = 01111111; // more
+byte vol1_reverse = 01111111; // startup volume for reverse maping numbers ( midi - vol1 codec vol. control )
+byte vol2_reverse = 01111111; // startup volume for reverse maping numbers ( midi - vol2 codec vol. control )
+byte basicnumber = 0;
+
+// includes for usbh
+#include <Usb.h>
+#include <usbh_midi.h>
+#include <SPI.h>
+#include <usbhub.h>
+
+// more USBH variables
+USB  Usb;
+USBH_MIDI  Midi(&Usb);
+USBHub  Hub1(&Usb);
+
+void MIDI_poll();
+
+void doDelay(unsigned long t1, unsigned long t2, unsigned long delayTime);
+
+boolean bFirst;
+uint16_t pid, vid;
+
+
+// AIC3101 codec address on I2C
+int codec_address = 0x18;  //  001 1000 AIC3101 codec address written in decimal (not hex)
+
+void setup()
+{
+  Serial.begin(9600); //serial com
+  Wire.begin();
+
+// USBH setup stuff
+
+  bFirst = true;
+  vid = pid = 0;
+
+  //Workaround for non UHS2.0 Shield 
+  pinMode(7,OUTPUT);
+  digitalWrite(7,HIGH);
+
+  if (Usb.Init() == -1) {
+    while(1); //halt
+  }//if (Usb.Init() == -1...
+  delay( 200 );
+
+  // END usb setup stuff
+
+  
+
+// reset codec in register 0 with a 1 ?? 
+Wire.beginTransmission(codec_address);  //start talking to the i2c slave at its address
+
+delay(10);
+
+// RESET CODEC
+Serial.println();
+Serial.print("RESET...");
+Serial.println();
+Wire.write(0x01);  // register 01 reset
+delay(10);
+Wire.write(0x80);  // reset go !
+delay(10);
+Wire.endTransmission();  // close the write
+delay(10);
+
+///////////////////////////////////////////////////////////
+// # DIGITAL INTERFACE
+
+// w 30 09 20 # I2S, 24-bit, continuous clock, no resync
+
+// # CLOCK SOURCE
+
+// w 30 65 01 # CODEC_CLKIN uses CLKDIV_OUT
+
+// Register 101: Clock Register
+ Wire.beginTransmission(codec_address);
+ Wire.write(0x65); // reg 101
+ Wire.write(0x01); // CODEC_CLKIN uses CLKDIV_OUT and not PLL out  !! 
+ delay (2);
+ Wire.endTransmission(); 
+
+// Register 102: Clock Generation Control Register
+ Wire.beginTransmission(codec_address);
+ Wire.write(0x66); // reg 102
+ Wire.write(0xa2); // CLKDIV_IN uses MCLK  & PLLCLK_IN uses MCLK
+ delay (2);
+ Wire.endTransmission(); 
+
+ // Register 37: DAC Power and Output Driver Control Register
+ Wire.beginTransmission(codec_address);
+ Wire.write(0x25); // reg 37
+ Wire.write(0xc0); // switch on left and right dacs
+ delay (2);
+ Wire.endTransmission(); 
+
+// Register 7: Codec Data-Path Setup Register
+Wire.beginTransmission(codec_address); 
+ Wire.write(0x07); // register 
+ Wire.write(0x0A); // Left DAC left channel, right DAC right channel
+ delay(10);
+ Wire.endTransmission();  // close the write
+
+// Register 8: Audio Serial Data Interface Control Register A
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0x08); // 
+ Wire.write(0x00); //   bclk and wclk is an input 
+ delay(10);
+ Wire.endTransmission();  // close the write
+ delay(10);
+
+// Register 9: Audio Serial Data Interface Control Register B
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0x09); // 
+ Wire.write(0x00); //   set the interface to I2S mode in 16 bit ( default )
+ delay(10);
+ Wire.endTransmission();  // close the write
+ delay(2);
+
+// AC coupled driver output . single-ended line out register
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0x0E); // register 
+ Wire.write(0x80); //
+ delay(2);
+ Wire.endTransmission();  // close the write
+
+ // Register 43: Left-DAC Digital Volume Control Register  set to 0db
+  Wire.beginTransmission(codec_address); 
+  Wire.write(0x2b); // reg 43
+  Wire.write(0x00); // 
+  delay (2);
+  Wire.endTransmission();
+
+// Register 44: Right-DAC Digital Volume Control Register set to 0db
+  Wire.beginTransmission(codec_address); 
+  Wire.write(0x2c); // reg 44
+  Wire.write(0x00); // 
+  delay (2);
+  Wire.endTransmission();
+
+   // Register 51: HPLOUT Output Level Control Register
+  Wire.beginTransmission(codec_address); 
+  Wire.write(0x33); // reg 51
+  Wire.write(0x2f); // 
+  delay (2);
+  Wire.endTransmission();
+
+// Register 65: HPROUT Output Level Control Register
+  Wire.beginTransmission(codec_address); 
+  Wire.write(0x41); // reg 44
+  Wire.write(0x2f); // 
+  delay (2);
+  Wire.endTransmission();
+
+// END INITIALIZE
+}
+
+
+
+
+void loop()
+{
+
+// USBH loop section
+  unsigned long t1;
+
+  Usb.Task();
+  t1 = micros();
+  if( Usb.getUsbTaskState() == USB_STATE_RUNNING )
+  {
+    MIDI_poll();
+  }
+  
+  volume();
+  
+  //delay(1ms)
+  //doDelay(t1, micros(), 1000);
+
+  // END USBH loop
+  
+}
+
+void volume()
+{
+
+// write midi value to volume reg on codec
+
+// VOLUME1
+{
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0x2f); // VOLUME 1  Register 47 DAC L1 to HPL out vol
+ vol1_reverse = map(volume1, 0, 127, 250, 128);
+ Wire.write(vol1_reverse); // 
+ // delay (1);
+ Wire.endTransmission();  // close the write
+// read
+ Wire.beginTransmission(codec_address);
+ Wire.write(0x2F); // read REG 47
+ Wire.endTransmission(false);  // IMPORTANT (false) end mission but keep I2C connection open for RESTART detailed in DATASHEET
+ Wire.requestFrom(codec_address, 1, 1);
+ byte volume1_state = Wire.read();
+
+//print 
+//Serial.print("volume1...");
+//Serial.print(volume1);
+//Serial.println("");
+//Serial.print(volume1_state);
+//Serial.println("");
+//delay(1);
+}
+
+// VOLUME2
+{
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0x40); // VOLUME 2  Register 64 DAC R1 to HPR vol
+ vol2_reverse = map(volume2, 0, 127, 250, 128);
+ Wire.write(vol2_reverse); // 
+ // delay (1);
+ Wire.endTransmission();  // close the write
+// read
+ Wire.beginTransmission(codec_address);
+ Wire.write(0x40); // read reg 64
+ Wire.endTransmission(false);  // IMPORTANT (false) end mission but keep I2C connection open for RESTART detailed in DATASHEET
+ Wire.requestFrom(codec_address, 1, 1);
+ byte volume2_state = Wire.read();
+
+//print 
+//Serial.print("volume2...");
+//Serial.print(volume2);
+//Serial.println("");
+//Serial.print(volume2_state);
+//Serial.println("");
+//delay(1);
+}
+
+// end set volume 1
+}
+
+// Poll USB MIDI Controler AND DUMP TO CONSOLE ???
+void MIDI_poll()
+{
+    char buf[20];
+    uint8_t bufMidi[64];
+    uint16_t  rcvd;
+
+    if(Midi.vid != vid || Midi.pid != pid){
+     //  sprintf(buf, "VID:%04X, PID:%04X", Midi.vid, Midi.pid);
+      // Serial.println(buf);
+      vid = Midi.vid;
+      pid = Midi.pid;
+    }
+    if(Midi.RecvData( &rcvd,  bufMidi) == 0 )
+
+    // Print the whole midi data number for testing / finding buttons sliders pots etc :)
+    // enable to print data to console
+   {
+ //   for(int loopx=1; loopx<3; loopx++)
+     {
+ //    int machine_number = bufMidi[loopx];
+ //         Serial.println("");
+ //         Serial.print(machine_number);
+ //         Serial.println("");
+     }
+    // END PRINT whole Midi Data :)
+   
+
+     
+     {
+  if((bufMidi[2] == 21) && (bufMidi[1] == 184)){
+       Serial.print("VOLUME 1  ");
+      volume1 = bufMidi[3];
+     }
+  if((bufMidi[2] == 22) && (bufMidi[1] == 184)){
+       Serial.print("VOLUME 2  ");
+      volume2 = bufMidi[3];
+     }
+  if((bufMidi[2] == 23) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 3  ");
+     }
+  if((bufMidi[2] == 24) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 4  ");
+     }
+  if((bufMidi[2] == 25) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 5  ");  
+     }
+  if((bufMidi[2] == 26) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 6  ");
+     }
+  if((bufMidi[2] == 27) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 7  ");
+     }
+  if((bufMidi[2] == 28) && (bufMidi[1] == 184)){
+      Serial.print("VOLUME 8  ");
+     }
+  if((bufMidi[2] == 41) && (bufMidi[1] == 184)){
+      Serial.print("PAN    1  ");
+     }
+  if((bufMidi[2] == 42) && (bufMidi[1] == 184)){
+      Serial.print("PAN    2  ");
+     }
+  if((bufMidi[2] == 43) && (bufMidi[1] == 184)){
+      Serial.print("PAN    3  ");
+     }
+  if((bufMidi[2] == 44) && (bufMidi[1] == 184)){
+      Serial.print("PAN    4  ");
+     }
+  if((bufMidi[2] == 45) && (bufMidi[1] == 184)){
+      Serial.print("PAN    5  ");
+     }
+  if((bufMidi[2] == 46) && (bufMidi[1] == 184)){
+      Serial.print("PAN    6  ");
+     }
+  if((bufMidi[2] == 47) && (bufMidi[1] == 184)){
+      Serial.print("PAN    7  ");
+     }
+  if((bufMidi[2] == 48) && (bufMidi[1] == 184)){
+      Serial.print("PAN    8  ");
+     }
+  // buttons
+  
+     if((bufMidi[2] == 9) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 1  ");
+     }
+      if((bufMidi[2] == 10) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 2  ");
+     }
+      if((bufMidi[2] == 11) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 3  ");
+     }
+      if((bufMidi[2] == 12) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 4  ");
+     }
+      if((bufMidi[2] == 25) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 5  ");
+     }
+      if((bufMidi[2] == 26) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 6  ");
+     }
+      if((bufMidi[2] == 27) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 7  ");
+     }
+      if((bufMidi[2] == 28) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 8  ");
+     }
+//Arrows
+      if((bufMidi[2] == 114) && (bufMidi[1] == 184) && (bufMidi[3] == 127)) {
+      Serial.print("Review Back  ");
+     }
+      if((bufMidi[2] == 115) && (bufMidi[1] == 184) && (bufMidi[3] == 127)) {
+      Serial.print("Review Forward  ");
+     }
+      if((bufMidi[2] == 116) && (bufMidi[1] == 184) && (bufMidi[3] == 127)){
+      Serial.print("STOP  ");
+      }
+      if((bufMidi[2] == 117) && (bufMidi[1] == 184) && (bufMidi[3] == 127)){
+      Serial.print("RECORD  ");
+      }
+
+       
+       // sprintf(buf, "%08X:", millis());
+       // Serial.print(buf);
+        for(int i=3; i<4; i++){
+        //  sprintf(buf, " %02X", bufMidi[i]);
+         // Serial.print(buf);
+          int basicnumber = bufMidi[i];
+          Serial.print(basicnumber);
+     }
+
+     
+     }   
+        Serial.println("");
+    }
+}
+
+
+// Delay time (max 16383 us)
+void doDelay(unsigned long t1, unsigned long t2, unsigned long delayTime)
+{
+    unsigned long t3;
+
+    if( t1 > t2 ){
+      t3 = (4294967295 - t1 + t2);
+    }else{
+      t3 = t2 - t1;
+    }
+
+    if( t3 < delayTime ){
+      delayMicroseconds(delayTime - t3);
+    }
+}
