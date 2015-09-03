@@ -1,0 +1,376 @@
+// Mixer Control for DAC Cirrus Logic CS4385
+// moved DAC volume controls to void MIDI_poll() so volume control registers are changed when USBmidi data detected rather than constantly being written.
+
+#include <Wire.h> // I2C libarary
+
+void volume();  // declair global void for codec volume
+byte volume1 = 01111111; // declair global vasribale for codec volume controls
+byte volume2 = 01111111; // more
+byte volume3 = 01111111;
+byte volume4 = 01111111;
+byte volume5 = 01111111;
+byte volume6 = 01111111;
+byte volume7 = 01111111;
+byte volume8 = 01111111;
+
+byte vol1_reverse = 01111111; // startup volume for reverse maping numbers ( midi - vol1 codec vol. control )
+byte vol2_reverse = 01111111; // startup volume for reverse maping numbers ( midi - vol2 codec vol. control )
+byte vol3_reverse = 01111111;
+byte vol4_reverse = 01111111;
+byte vol5_reverse = 01111111;
+byte vol6_reverse = 01111111;
+byte vol7_reverse = 01111111;
+byte vol8_reverse = 01111111;
+
+byte basicnumber = 0;
+
+// includes for usbh
+#include <Usb.h>
+#include <usbh_midi.h>
+#include <SPI.h>
+#include <usbhub.h>
+
+// more USBH variables
+USB  Usb;
+USBH_MIDI  Midi(&Usb);
+USBHub  Hub1(&Usb);
+
+void MIDI_poll();
+
+void doDelay(unsigned long t1, unsigned long t2, unsigned long delayTime);
+
+boolean bFirst;
+uint16_t pid, vid;
+
+// cirrius logic CS4385 codec address on I2C
+int codec_address = 0x18;  // [7bit i2c adress] 011000 [A0 pin =0] 0 
+
+ void setup()
+{
+
+//Workaround for non UHS2.0 Shield 
+  pinMode(7,OUTPUT);
+  digitalWrite(7,HIGH);
+
+  if (Usb.Init() == -1) {
+    while(1); //halt
+  }//if (Usb.Init() == -1...
+  delay( 200 );
+
+  // END usb setup stuff
+
+// USBH setup stuff
+bFirst = true;
+vid = pid = 0;
+  
+Serial.begin(9600); //serial com
+
+pinMode(2, OUTPUT);      // pin 2 setup as OUTPUT
+
+digitalWrite(2, HIGH);
+delay(5);
+digitalWrite(2, LOW);
+delay(20);
+
+// Initialize CS4385 codec and reset in I2C mode
+
+// I2C GO..
+Wire.begin();
+
+// START DAC RESET PIN HIGH
+digitalWrite(2, HIGH);   // pin 2 high and leave high ?
+
+// I2C register program setup
+
+ Wire.beginTransmission(codec_address);  
+ Wire.write(0x2);  // Mode Control 1 ( reg 0x2) 
+ Wire.write(B10000000);  // get software control and power up control ports
+ Wire.endTransmission();  // close the write
+ delay(10);
+ //
+
+ Wire.beginTransmission(codec_address);
+ Wire.write(0x3); // PCM Control 
+ Wire.write(B00010011); //  set to I2S mode auto detect FS & Khz audio
+ Wire.endTransmission();
+ delay (10);
+
+ 
+// Wire.beginTransmission(codec_address);
+// Wire.write(0x16); // PCM Control 
+// Wire.write(B00100000); //  set to I2S mode auto detect FS & Khz audio
+// Wire.endTransmission(); 
+// delay (10);
+
+}   // END INITIALIZE
+
+void loop()
+{
+
+// USBH loop section
+  unsigned long t1;
+
+  Usb.Task();
+  t1 = micros();
+  if( Usb.getUsbTaskState() == USB_STATE_RUNNING )
+  {
+    MIDI_poll();
+  }
+  //delay(1ms)
+  //doDelay(t1, micros(), 1000);
+  // END USBH loop
+ }
+
+
+// NOTES
+// write midi value to volume reg on codec  [ address vol1 0Bh, vol2 0Ch, vol3 0Eh, vol4 0Fh, vol5 11h,vol6 12h,vol7 14h,vol8 15h ]
+// Volume1 read / print example
+// {
+// Wire.beginTransmission(codec_address);
+// Wire.write(0xB); // read REG 0xB
+// Wire.endTransmission(false); 
+// Wire.requestFrom(codec_address, 1);
+// delay(5);
+// byte volume1_state = Wire.read();
+// Wire.endTransmission();
+// print read from register
+// Serial.print("volume1...");
+// Serial.print(volume1);
+// Serial.println("");
+// Serial.print(volume1_state);
+// Serial.println("");
+// }
+
+
+
+
+// Poll USB MIDI Controler and control volumes on Codec
+void MIDI_poll()
+{
+    char buf[20];
+    uint8_t bufMidi[64];
+    uint16_t  rcvd;
+
+    if(Midi.vid != vid || Midi.pid != pid){
+     //  sprintf(buf, "VID:%04X, PID:%04X", Midi.vid, Midi.pid);
+      // Serial.println(buf);
+      vid = Midi.vid;
+      pid = Midi.pid;
+    }
+    if(Midi.RecvData( &rcvd,  bufMidi) == 0 )
+
+    // Print the whole midi data number for testing / finding buttons sliders pots etc :)
+    // enable to print data to console
+   {
+ //   for(int loopx=1; loopx<3; loopx++)
+     {
+ //    int machine_number = bufMidi[loopx];
+ //         Serial.println("");
+ //         Serial.print(machine_number);
+ //         Serial.println("");
+     }
+    // END PRINT whole Midi Data :)
+   
+{
+   
+   // VOLUME 1  
+    
+  if((bufMidi[2] == 21) && (bufMidi[1] == 184))
+  {
+      Serial.print("VOLUME 1  ");
+      volume1 = bufMidi[3];
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0xB); // VOLUME A1 on Dac 0xb
+ vol1_reverse = map(volume1, 0, 127, 127, 0);
+ Wire.write(vol1_reverse); //
+ Wire.endTransmission();  // close the write
+     }
+  
+ // VOLUME 2 
+ 
+  if((bufMidi[2] == 22) && (bufMidi[1] == 184))
+  {
+      Serial.print("VOLUME 2  ");
+      volume2 = bufMidi[3];
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0xC); // 
+ vol2_reverse = map(volume2, 0, 127, 127, 0);
+ Wire.write(vol2_reverse); // 
+ Wire.endTransmission();  // close the write
+ }
+  
+// VOLUME 3
+ 
+  if((bufMidi[2] == 23) && (bufMidi[1] == 184))
+  {
+      Serial.print("VOLUME 3  ");
+      volume3 = bufMidi[3];
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0xE); //
+ vol3_reverse = map(volume3, 0, 127, 127, 0);
+ Wire.write(vol3_reverse); // 
+ Wire.endTransmission();  // close the write
+ }
+
+// VOLUME 4
+
+  if((bufMidi[2] == 24) && (bufMidi[1] == 184))
+  {
+      Serial.print("VOLUME 4  ");
+      volume4 = bufMidi[3];
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0xF); //
+ vol4_reverse = map(volume4, 0, 127, 127, 0);
+ Wire.write(vol4_reverse); // 
+ Wire.endTransmission();  // close the write
+   }
+
+// VOLUME 5    
+  if((bufMidi[2] == 25) && (bufMidi[1] == 184))
+  {
+      Serial.print("VOLUME 5  ");
+      volume5 = bufMidi[3];  
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0x11); //
+ vol5_reverse = map(volume5, 0, 127, 127, 0);
+ Wire.write(vol5_reverse); // 
+ Wire.endTransmission();  // close the write
+  }
+
+  // VOLUME6 
+     
+  if((bufMidi[2] == 26) && (bufMidi[1] == 184))
+  {
+      Serial.print("VOLUME 6  ");
+      volume6 = bufMidi[3];
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0x12); //
+ vol6_reverse = map(volume6, 0, 127, 127, 0);
+ Wire.write(vol6_reverse); // 
+ Wire.endTransmission();  // close the write
+ }
+
+// VOLUME 7    
+  if((bufMidi[2] == 27) && (bufMidi[1] == 184))
+  {
+      Serial.print("VOLUME 7  ");
+      volume7 = bufMidi[3];
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0x14); //
+ vol7_reverse = map(volume7, 0, 127, 127, 0);
+ Wire.write(vol7_reverse); // 
+ Wire.endTransmission();  // close the write
+  }
+
+// VOLUME 8    
+  if((bufMidi[2] == 28) && (bufMidi[1] == 184))
+  {
+      Serial.print("VOLUME 8  ");
+      volume8 = bufMidi[3];
+ Wire.beginTransmission(codec_address); 
+ Wire.write(0x15); //
+ vol8_reverse = map(volume8, 0, 127, 127, 0);
+ Wire.write(vol8_reverse); // 
+ Wire.endTransmission();  // close the write
+  }
+
+
+// Second Row of knobs on Control Surface
+     
+  if((bufMidi[2] == 41) && (bufMidi[1] == 184)){
+      Serial.print("PAN    1  ");
+     }
+  if((bufMidi[2] == 42) && (bufMidi[1] == 184)){
+      Serial.print("PAN    2  ");
+     }
+  if((bufMidi[2] == 43) && (bufMidi[1] == 184)){
+      Serial.print("PAN    3  ");
+     }
+  if((bufMidi[2] == 44) && (bufMidi[1] == 184)){
+      Serial.print("PAN    4  ");
+     }
+  if((bufMidi[2] == 45) && (bufMidi[1] == 184)){
+      Serial.print("PAN    5  ");
+     }
+  if((bufMidi[2] == 46) && (bufMidi[1] == 184)){
+      Serial.print("PAN    6  ");
+     }
+  if((bufMidi[2] == 47) && (bufMidi[1] == 184)){
+      Serial.print("PAN    7  ");
+     }
+  if((bufMidi[2] == 48) && (bufMidi[1] == 184)){
+      Serial.print("PAN    8  ");
+     }
+  // 8 buttons
+  
+     if((bufMidi[2] == 9) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 1  ");
+     }
+      if((bufMidi[2] == 10) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 2  ");
+     }
+      if((bufMidi[2] == 11) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 3  ");
+     }
+      if((bufMidi[2] == 12) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 4  ");
+     }
+      if((bufMidi[2] == 25) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 5  ");
+     }
+      if((bufMidi[2] == 26) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 6  ");
+     }
+      if((bufMidi[2] == 27) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 7  ");
+     }
+      if((bufMidi[2] == 28) && (bufMidi[1] == 152)){
+      Serial.print("BUTTON 8  ");
+     }
+
+// 4 Arrows
+      if((bufMidi[2] == 114) && (bufMidi[1] == 184) && (bufMidi[3] == 127)) {
+      Serial.print("Review Back  ");
+     }
+      if((bufMidi[2] == 115) && (bufMidi[1] == 184) && (bufMidi[3] == 127)) {
+      Serial.print("Review Forward  ");
+     }
+      if((bufMidi[2] == 116) && (bufMidi[1] == 184) && (bufMidi[3] == 127)){
+      Serial.print("STOP  ");
+      }
+      if((bufMidi[2] == 117) && (bufMidi[1] == 184) && (bufMidi[3] == 127)){
+      Serial.print("RECORD  ");
+      }
+
+       
+       // sprintf(buf, "%08X:", millis());
+       // Serial.print(buf);
+        for(int i=3; i<4; i++){
+        //  sprintf(buf, " %02X", bufMidi[i]);
+         // Serial.print(buf);
+          int basicnumber = bufMidi[i];
+          Serial.print(basicnumber);
+     }
+
+     
+     }   
+        Serial.println("");
+    }
+}
+
+
+// Delay time (max 16383 us)
+void doDelay(unsigned long t1, unsigned long t2, unsigned long delayTime)
+{
+    unsigned long t3;
+
+    if( t1 > t2 ){
+      t3 = (4294967295 - t1 + t2);
+    }else{
+      t3 = t2 - t1;
+    }
+
+    if( t3 < delayTime ){
+      delayMicroseconds(delayTime - t3);
+    }
+}
