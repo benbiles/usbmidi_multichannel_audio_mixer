@@ -4,7 +4,9 @@ for now , arduino novation launchcontrol usb midi usbhost
 
 For now this is working with the Novation LaunchControl control surface although I would like to write support for more control surfaces or maybe even write in some kind of learning code so new control surfaces can be added.
 
-Myabe a RPROM to store new surfaces..
+Myabe an EPROM could store the new contro surfaces data ?
+
+Whatever it will end up being the aim is to make this project simple fast & low power.
 
 anyway, for now..
 
