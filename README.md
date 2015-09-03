@@ -1,7 +1,14 @@
-# novation_launchcontrol_usbmidi_arduino
-arduino novation launchcontrol usb midi usbhost
+usbmidi_multichannel_audio_mixer/
 
-tInstructions to hook up an arduino to Novation LaunchControl and get midi messages into your arduino.
+for now , arduino novation launchcontrol usb midi usbhost
+
+For now this is working with the Novation LaunchControl control surface although I would like to write support for more control surfaces or maybe even write in some kind of learning code so new control surfaces can be added.
+
+Myabe a RPROM to store new surfaces..
+
+anyway, for now..
+
+Instructions to hook up an arduino to Novation LaunchControl and get midi messages into your arduino.
 
 you will need
 
@@ -40,8 +47,9 @@ press keys and turn knobs on the LaunchControl and you should see the relevent m
 
 EDIT THE CODE AND GET THE NUMBERS TO DO THINGS FROM THE ARDUINO :) !!!!
 
+the file USBmidi_control_CS4385_DAC initializes the CS4385_DAC and contols the 8 volumes of the DAC's output. I am using digital pin 2 on the arduino to control reset on the DAC. WARNING ! I have not programed any Mutec ( mute ) controls on the DACS startup, so don't blame me if you blow your speakers, ears etc !! The wiring diagram I used I copied from the softeare controlled wiring example in the datasheet. I set the inputs to I2S mode and FS speed to autodetect.
 
-the file AIC3101_codec_control will inistialise the Codec and output audio coming in from I2S. The Launch control controls volume left and right with knobs 1 & 2
+the older file AIC3101_codec_control will inistialise the Codec and output audio coming in from I2S. The Launch control controls volume left and right with knobs 1 & 2. ( this code constantly writes to the 2 volume registers ) the volume register writes are only written on detecting new USBmidi data now in the USBmidi_control_CS4385 code. so you can copy that if you need it. I wont be working on the AIC3101 file..
 
-I will be working next on an 8 channel mixer DAC for 8 channel mix control.
+
 
